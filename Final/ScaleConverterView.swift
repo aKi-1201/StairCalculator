@@ -17,27 +17,27 @@ struct ScaleConverterView: View {
     }
     
     var inputLabel: String {
-        isRealToScaled ? "Real Dimension (cm)" : "Scaled Dimension (cm)"
+        isRealToScaled ? "實際尺寸 (cm)" : "縮尺尺寸 (cm)"
     }
     
     var resultLabel: String {
-        isRealToScaled ? "Scaled Dimension (cm)" : "Real Dimension (cm)"
+        isRealToScaled ? "縮尺尺寸 (cm)" : "實際尺寸 (cm)"
     }
     
     var body: some View {
         NavigationView {
             Form {
                 Section {
-                    Picker("Mode", selection: $isRealToScaled) {
-                        Text("Real → Scaled").tag(true)
-                        Text("Scaled → Real").tag(false)
+                    Picker("模式", selection: $isRealToScaled) {
+                        Text("實際尺寸 → 縮尺").tag(true)
+                        Text("縮尺 → 實際尺寸").tag(false)
                     }
                     .pickerStyle(.segmented)
                     .listRowInsets(EdgeInsets())
                     .padding()
                 }
                 
-                Section(header: Text("Input")) {
+                Section(header: Text("輸入")) {
                     HStack {
                         Text(inputLabel)
                         Spacer()
@@ -48,7 +48,7 @@ struct ScaleConverterView: View {
                     }
                     
                     VStack(alignment: .leading) {
-                        Text("Scale 1:\(selectedScale)")
+                        Text("比例 1:\(selectedScale)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
@@ -61,7 +61,7 @@ struct ScaleConverterView: View {
                     }
                 }
                 
-                Section(header: Text("Result")) {
+                Section(header: Text("結果")) {
                     HStack {
                         Text(resultLabel)
                         Spacer()
@@ -76,16 +76,16 @@ struct ScaleConverterView: View {
                     Button(action: {
                         dismiss()
                     }) {
-                        Text("Done")
+                        Text("完成")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
                 }
             }
-            .navigationTitle("Scale Converter")
+            .navigationTitle("比例換算")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Reset") {
+                    Button("重設") {
                         inputValue = 0
                     }
                 }

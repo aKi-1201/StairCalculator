@@ -6,10 +6,14 @@
 //
 
 import SwiftUI
+import AlertToast
 
 struct RootView: View {
-    // Data Persistence
+    // Data Persistence (Settings)
     @AppStorage("defaultTreadDepth") private var defaultTreadDepth: Double = 26.0
+    
+    // Data Persistence (History)
+    @StateObject private var historyManager = HistoryManager()
     
     // State Properties
     @State private var totalHeight: Double = 300.0
@@ -18,9 +22,14 @@ struct RootView: View {
     @State private var includeLanding: Bool = false
     @State private var landingDepth: Double = 120.0
     @State private var showScaleConverter: Bool = false
-    @State private var showAlert: Bool = false
-    @State private var alertMessage: String = ""
+    @State private var showHistory: Bool = false
     @State private var projectDate: Date = Date()
+    
+    // AlertToast State
+    @State private var showToast: Bool = false
+    @State private var toastType: AlertToast.AlertType = .regular
+    @State private var toastTitle: String = ""
+    @State private var toastSubTitle: String? = nil
     
     // Computed Properties for Calculation
     var numberOfRisers: Int {
@@ -42,27 +51,40 @@ struct RootView: View {
         return run
     }
     
+    var shareSummary: String {
+        """
+        樓梯計算紀錄
+        日期：\(projectDate.formatted(date: .numeric, time: .omitted))
+        
+        總高度：\(totalHeight) 公分
+        階數：\(numberOfRisers)
+        實際級高：\(String(format: "%.2f", actualRiserHeight)) 公分
+        級深：\(treadDepth) 公分
+        總進深：\(String(format: "%.2f", totalRun)) 公分
+        是否包含平台：\(includeLanding ? "是" : "否")
+        """
+    }
+    
     var body: some View {
         NavigationView {
             Form {
                 Section {
-                    // Visual Diagram
                     StairDiagramView(
                         numberOfRisers: numberOfRisers,
                         includeLanding: includeLanding
                     )
                     .frame(height: 200)
-                    .listRowInsets(EdgeInsets()) // Make it full width
+                    .listRowInsets(EdgeInsets())
                     .background(Color(UIColor.systemGroupedBackground))
                 }
                 
-                Section(header: Text("Project Info")) {
-                    DatePicker("Date", selection: $projectDate, displayedComponents: .date)
+                Section(header: Text("專案資訊")) {
+                    DatePicker("日期", selection: $projectDate, displayedComponents: .date)
                 }
                 
-                Section(header: Text("Dimensions Input")) {
+                Section(header: Text("樓梯尺寸")) {
                     HStack {
-                        Text("Total Height (cm)")
+                        Text("總高度 (cm)")
                         Spacer()
                         TextField("Height", value: $totalHeight, format: .number)
                             .keyboardType(.decimalPad)
@@ -71,7 +93,7 @@ struct RootView: View {
                     
                     VStack(alignment: .leading) {
                         HStack {
-                            Text("Ideal Riser Height")
+                            Text("理想級高")
                             Spacer()
                             Text("\(idealRiserHeight, specifier: "%.1f") cm")
                                 .foregroundColor(.secondary)
@@ -80,7 +102,7 @@ struct RootView: View {
                     }
                     
                     HStack {
-                        Text("Tread Depth (cm)")
+                        Text("級深 (cm)")
                         Spacer()
                         TextField("Depth", value: $treadDepth, format: .number)
                             .keyboardType(.decimalPad)
@@ -94,13 +116,13 @@ struct RootView: View {
                     }
                 }
                 
-                Section(header: Text("Configuration")) {
-                    Toggle("Include Landing", isOn: $includeLanding)
+                Section(header: Text("配置設定")) {
+                    Toggle("包含平台", isOn: $includeLanding)
                         .tint(.blue)
                     
                     if includeLanding {
                         HStack {
-                            Text("Landing Depth (cm)")
+                            Text("平台深度 (cm)")
                             Spacer()
                             TextField("Depth", value: $landingDepth, format: .number)
                                 .keyboardType(.decimalPad)
@@ -110,49 +132,94 @@ struct RootView: View {
                     }
                 }
                 
-                Section(header: Text("Results")) {
-                    ResultRow(label: "Number of Risers", value: "\(numberOfRisers)")
-                    ResultRow(label: "Actual Riser Height", value: String(format: "%.2f cm", actualRiserHeight))
-                    ResultRow(label: "Total Run Length", value: String(format: "%.2f cm", totalRun))
+                Section(header: Text("計算結果")) {
+                    ResultRow(label: "階數", value: "\(numberOfRisers)")
+                    ResultRow(label: "實際級高", value: String(format: "%.2f cm", actualRiserHeight))
+                    ResultRow(label: "總進深", value: String(format: "%.2f cm", totalRun))
                 }
                 
                 Section {
                     Button(action: {
                         if totalHeight <= 0 {
-                            alertMessage = "Total height must be greater than 0."
-                            showAlert = true
+                            toastType = .error(.red)
+                            toastTitle = "錯誤"
+                            toastSubTitle = "總高度必須大於0."
+                            showToast = true
                         } else {
-                            // Trigger some action or just validate
+                            saveProject()
                         }
                     }) {
-                        Text("Validate Inputs")
-                            .frame(maxWidth: .infinity)
+                        HStack {
+                            Image(systemName: "square.and.arrow.down")
+                            Text("儲存至歷史")
+                        }
+                        .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
+                    
+                    if #available(iOS 16.0, *) {
+                        ShareLink(item: shareSummary) {
+                            HStack {
+                                Image(systemName: "square.and.arrow.up")
+                                Text("分享結果")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
             }
-            .navigationTitle("Stair Calculator")
+            .navigationTitle("樓梯計算器")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        showHistory = true
+                    }) {
+                        Image(systemName: "clock")
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         showScaleConverter = true
                     }) {
                         Image(systemName: "ruler")
-                        Text("Scale")
+                        Text("比例")
                     }
                 }
             }
             .sheet(isPresented: $showScaleConverter) {
                 ScaleConverterView()
             }
-            .alert("Input Error", isPresented: $showAlert) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(alertMessage)
+            .sheet(isPresented: $showHistory) {
+                HistoryView(historyManager: historyManager)
+            }
+            .toast(isPresenting: $showToast) {
+                AlertToast(displayMode: .hud, type: toastType, title: toastTitle, subTitle: toastSubTitle)
             }
             .animation(.easeInOut, value: includeLanding)
             .animation(.spring(), value: totalHeight)
         }
+    }
+    
+    func saveProject() {
+        let project = StairProject(
+            date: projectDate,
+            totalHeight: totalHeight,
+            idealRiserHeight: idealRiserHeight,
+            treadDepth: treadDepth,
+            includeLanding: includeLanding,
+            landingDepth: landingDepth,
+            numberOfRisers: numberOfRisers,
+            actualRiserHeight: actualRiserHeight,
+            totalRun: totalRun
+        )
+        historyManager.saveProject(project)
+        
+        toastType = .complete(.green)
+        toastTitle = "已儲存"
+        toastSubTitle = "專案已儲存至歷史紀錄."
+        showToast = true
     }
 }
 
@@ -178,40 +245,21 @@ struct StairDiagramView: View {
     
     var body: some View {
         GeometryReader { geometry in
-            let width = geometry.size.width
-            let height = geometry.size.height
             let padding: CGFloat = 20
             
             Canvas { context, size in
                 let drawingWidth = size.width - 2 * padding
                 let drawingHeight = size.height - 2 * padding
                 
-                // Calculate step dimensions for drawing
-                // We want to fit the stairs in the box
-                // Total steps = numberOfRisers
-                // If landing, add extra width
-                
                 let steps = CGFloat(numberOfRisers)
                 if steps == 0 { return }
                 
-                // Aspect ratio of the stairs
-                // Let's assume a standard ratio for visualization or just fit to box
-                // We'll fit to box.
-                
-                // Each step goes UP and RIGHT.
-                // Total UP = steps
-                // Total RIGHT = steps (approx) + landing
-                
-                let landingRatio: CGFloat = includeLanding ? 3.0 : 0.0 // Landing is roughly 3 steps wide visually
+                let landingRatio: CGFloat = includeLanding ? 3.0 : 0.0
                 let totalRunUnits = steps + landingRatio
                 let totalRiseUnits = steps
                 
                 let unitWidth = drawingWidth / totalRunUnits
                 let unitHeight = drawingHeight / totalRiseUnits
-                
-                // Use the smaller unit to maintain aspect ratio somewhat, or just stretch?
-                // Let's stretch to fill for clarity, or maintain aspect if possible.
-                // Let's just fill the available space.
                 
                 var path = Path()
                 path.move(to: CGPoint(x: padding, y: size.height - padding))
@@ -220,14 +268,11 @@ struct StairDiagramView: View {
                     let x = padding + CGFloat(i) * unitWidth
                     let y = size.height - padding - CGFloat(i) * unitHeight
                     
-                    // Riser (Up)
                     path.addLine(to: CGPoint(x: x, y: y - unitHeight))
                     
-                    // Tread (Right)
                     if i < Int(steps) - 1 {
                         path.addLine(to: CGPoint(x: x + unitWidth, y: y - unitHeight))
                     } else {
-                        // Last step / Landing
                         if includeLanding {
                             path.addLine(to: CGPoint(x: x + unitWidth + (landingRatio * unitWidth), y: y - unitHeight))
                         } else {
@@ -236,16 +281,13 @@ struct StairDiagramView: View {
                     }
                 }
                 
-                // Close the shape to fill it
                 let finalX = includeLanding ? padding + drawingWidth : padding + steps * unitWidth
-                let finalY = size.height - padding - steps * unitHeight
                 
                 path.addLine(to: CGPoint(x: finalX, y: size.height - padding))
                 path.closeSubpath()
                 
                 context.fill(path, with: .color(.blue.opacity(0.3)))
                 context.stroke(path, with: .color(.blue), lineWidth: 2)
-                
             }
         }
         .background(Color.white)
